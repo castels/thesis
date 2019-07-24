@@ -1,0 +1,133 @@
+---
+title: "dataVis"
+author: "Sophie Castel"
+date: "7/18/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Ideas
+\begin{itemize}
+\item Stack graphs on top of one another, calculate the delta between interpolated point and original point, colour it, stack the lengths like a histogram for each interpolation technique. 
+\item TWO SECTIONS: 1. How the HW performs in light of perturbations to MT TT and WT 2. How the HW stacks up against the others
+
+\end{itemize}
+
+
+```{r}
+library(ggplot2)
+library(plotly)
+```
+Let's start with just a trivial visualization. Colouring in the area between lines representing error using \verb+polygon+
+
+```{r}
+N <- length(IntData[[1]][[1]][[1]][[1]])
+D <- length(IntData)
+error <- numeric(N)
+meanError <- numeric(N)
+D_vec <- numeric(D)
+p <- numeric(D)
+
+for(d in 1:length(IntData)){
+for(k in 1:N){
+  
+  intTest <- IntData[[d]][[1]][[4]][[3]][[k]] #d1,m18,p0.05,g1
+  orgTest <- OriginalData[[d]]
+
+p <- ggplot() +  
+  geom_ribbon(aes(ymin = (as.numeric(intTest)), ymax = (as.numeric(orgTest)), x = 0:(length(intTest)-1)), fill = "mistyrose2") +
+  
+  geom_line(data = orgTest, aes(x = 0:(length(orgTest)-1), y = as.numeric(orgTest)), color = "lightpink3") +  
+  geom_line(data = intTest, aes(x = 0:(length(intTest)-1), y = as.numeric(intTest)), color = "lightblue3") + 
+  
+  ggtitle("Original v.s. Interpolated Data") +
+  
+  labs(x = "time", 
+       y = "value",
+       label = "Legend Text")
+  
+
+    #error[k] <- sum(abs(orgTest-intTest))
+}
+  
+  meanError[d] <- mean(error)
+  D_vec[d] <- d
+
+}
+
+```
+
+```{r}
+plot(x = D,y = meanError, xlab = "Dataset index", ylab = "mean(sum(abs(x-X)))", type = "l")
+
+p <- plot_ly(z = ~volcano) %>% add_surface(
+  contours = list(
+    z = list(
+      show=TRUE,
+      usecolormap=TRUE,
+      highlightcolor="#ff0000",
+      project=list(z=TRUE)
+      )
+    )
+  ) %>%
+  layout(
+    scene = list(
+      camera=list(
+        eye = list(x=1.87, y=0.88, z=-0.64)
+        )
+      )
+  )
+
+
+x <- seq(0,100,length.out=100)
+y <- seq(0,10,length.out=100)
+z <- matrix(nrow = 100, ncol = 100)
+
+for(i in 1:nrow(z)){
+  for(j in 1:ncol(z)){
+    z[i,j] = x[i]+y[j]
+  }
+}
+p <- plot_ly(x=x,y=y,z=z) %>% add_surface()
+
+
+
+### Creating a surface for Dataset D, x=p,y=g,z=MSE
+
+
+MSEmat <- matrix(nrow=length(prop_vec),ncol=length(gap_vec))
+rownames(MSEmat) <- prop_vec_names
+colnames(MSEmat) <- gap_vec_names
+
+z_mat <- list()
+metric = "abs_differences"
+
+for(d in 1:D){
+  for(p in 1:P){
+    for(g in 1:G){
+      MSEmat[p,g] <- log(Evaluation[[d]][[p]][[g]][[m]][metric,"mean"])
+   }
+  }
+  z_mat[[d]] <- MSEmat
+  names(z_mat)[d] <- paste("D",d,sep="")
+}
+
+
+x <- prop_vec
+y <- gap_vec
+z <- MSEmat
+plot_ly(data = data.frame(z_mat)) %>% 
+  layout(title = paste(metric,collapse=""))
+  add_surface(x=x,y=y,z=z_mat[[1]], opacity = 1*0.20, name = names(z_mat)[1]) %>%
+  add_surface(x=x,y=y,z=z_mat[[2]], opacity = 2*0.20, name = names(z_mat)[2]) %>%
+  add_surface(x=x,y=y,z=z_mat[[3]], opacity = 3*0.20, name = names(z_mat)[3]) %>%
+  add_surface(x=x,y=y,z=z_mat[[4]], opacity = 4*0.20, name = names(z_mat)[4]) %>%
+  add_surface(x=x,y=y,z=z_mat[[5]], opacity = 5*0.20, name = names(z_mat)[5]) 
+  
+
+
+```
+

@@ -1,0 +1,158 @@
+---
+title: "Comparing the Performance of the HW Interpolator Against Other Known Interpolators"
+author: "Sophie Castel"
+date: "7/23/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+# Sandbox
+
+## Preamble
+
+```{r libraries, cache = TRUE}
+library(multitaper)
+library(tsinterp)
+library(imputeTS)
+library(zoo)
+library(forecast)
+library(MASS)
+library(ggplot2)
+library(dplyr)
+library(snow)
+library(parallel)
+library(RColorBrewer)
+
+# setting a seed for reproducibility
+set.seed(997)
+```
+
+
+## Interpolators
+
+Here we call some functions used for the interpolation of stationary time series.
+```{r algorithms, cache = TRUE}
+nearestNeighbor <- function(x) {
+  stopifnot(is.ts(x)) 
+  
+  findNearestNeighbors <- function(x, i) {
+    leftValid <- FALSE
+    rightValid <- FALSE 
+    numItLeft <- 1
+    numItRight <- 1
+    while (!leftValid) {
+      leftNeighbor <- x[i - numItLeft]
+      if (!is.na(leftNeighbor)) {
+        leftValid <- TRUE
+        leftNeighbor <- i - numItLeft
+      }
+      numItLeft <- numItLeft + 1
+    }
+    while (!rightValid) {
+      rightNeighbor <- x[i + numItRight]
+      if (!is.na(rightNeighbor)) {
+        rightValid <- TRUE
+        rightNeighbor <- i + numItRight
+      }
+      numItRight <- numItRight + 1
+    }
+    return(c(leftNeighbor, rightNeighbor))
+  }
+  
+  for (i in 1:length(x)) {
+    if (is.na(x[i])) {
+      nearestNeighborsIndices <- findNearestNeighbors(x, i)
+      a <- nearestNeighborsIndices[1]
+      b <- nearestNeighborsIndices[2]
+      if (i < ((a + b) / 2)) {
+        x[i] <- x[a]
+      } else {
+        x[i] <- x[b]
+      }
+    }
+  }
+  return(x)
+}
+
+algorithm_names <- c("Nearest Neighbor",
+                     "Linear Interpolation", 
+                     "Natural Cubic Spline",
+                     "FMM Cubic Spline", 
+                     "Hermite Cubic Spline",
+                     "Stineman Interpolation",
+                     "Kalman - ARIMA",
+                     "Kalman - StructTS",
+                     "Last Observation Carried Forward",
+                     "Next Observation Carried Backward", 
+                     "Simple Moving Average", 
+                     "Linear Weighted Moving Average",
+                     "Exponential Weighted Moving Average",
+                     "Replace with Mean",
+                     "Replace with Median", 
+                     "Replace with Mode",
+                     "Replace with Random",
+                     "Hybrid Wiener Interpolator")
+algorithm_calls <- c("nearestNeighbor(", 
+                     "na.approx(", 
+                     "na.spline(method = 'natural', object = ",
+                     "na.spline(method = 'fmm', object = ", 
+                     "na.spline(method = 'monoH.FC', object = ", 
+                     "na_interpolation(option = 'stine', x = ", 
+                     "na_kalman(model = 'auto.arima', x = ", 
+                     "na_kalman(model = 'StructTS', x = ",
+                     "imputeTS::na.locf(option = 'locf', x = ", 
+                     "imputeTS::na.locf(option = 'nocb', x = ", 
+                     "na_ma(weighting = 'simple', x = ",
+                     "na_ma(weighting = 'linear', x = ", 
+                     "na_ma(weighting = 'exponential', x = ",
+                     "na_mean(option = 'mean', x = ", 
+                     "na_mean(option = 'median', x = ",
+                     "na_mean(option = 'mode', x = ", 
+                     "na_random(",
+                     "interpolate(gap = which(is.na(x) == TRUE), progress = FALSE, z = ")
+
+algorithms <- data.frame(algorithm_names, algorithm_calls)
+```
+
+# Interpolating the Gappy Data (in parallel)
+Perform parallel interpolation on the Gappy Data using specified methods
+```{r IntData, cache = TRUE}
+methods <- c(18)
+IntData <- list()
+
+for(d in 1:length(OriginalData)){
+  IntData[[d]] <- parInterpolate(data = GappyData[[d]], methods = methods)
+}
+
+names(IntData) <- names(OriginalData)
+```
+
+From this we get a multi-level list object called IntData, with dimension $d,m,p,g,k$:
+$d$ = 1, ...,D = dataset$_d$
+$m$ = 1, ...,M = interpolation method$_m$
+$p$ = 1, ...,P length(prop_vec) = proportion of missing values$_p$
+$g$ = 1, ...,G length(gap_vec) = gap width$_g$
+$k$ = 1, ...,N = sample ID under each $d,m,p,g,k$ specification
+
+# Computing the Performance Metrics
+Applying the function to our Original and Interpolated Data:
+```{r pmats}
+pmats <- performance(x=OriginalData, X=IntData)
+```
+
+So, we have a list: $D \times M \times P \times G \times N \times C$ where $M$ is the number of interpolation methods used and $C=17$ is the number of performance criteria computed.
+
+What are we interested in? The performance of each interpolation method with respect to the proportion missing and gap width. 
+Thus, we want to compute the mean of each of the 17 performance criteria in each g,p,d,m specification across all k simulations.
+
+# Evaluating the Performance Metrics
+```{r Evaluation}
+Evaluation <- evaluate(pmats = pmats, task = "mean")
+```
+
+

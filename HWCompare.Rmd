@@ -1,0 +1,24 @@
+---
+title: "Evaluating the HW Interpolator Under Different Types of Stress"
+author: "Sophie Castel"
+date: "7/23/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+\begin{itemize}
+\item Get rid of amplitude modulation (for now)
+\item Mt is not as interesting because we already know that it is easy to remove these trends and relatively well (in fact we could use a spline.)
+\item Tt is the more interesting piece--- it is more of an open problem. How to model and identify frequencies close together and lots of frequencies
+\item Start by fixing proportion missing and gap width. Use arbitrary polynomial Mt. Page one: generate 5-6 different sets (numFreq = 20, freqRes = wide), (numFreq = 40, freqRes = closer), (numFreq = 60, freqRes = close). Show how the MSE MAE change as we increase the closeness. Then iterate, but changing proportion missing. And then change gap width. etc.
+\item generate a quantile distribution for the criterion across the k samples (under each specification) and a confidence interval. 
+\item in the comparison, apply different interpolators under each specification and then confidence intervals as before. See which are wider.
+\item Start small in digestible chunks. 
+\end{itemize}
+
+# Sandbox

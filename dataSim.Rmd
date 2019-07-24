@@ -1,0 +1,167 @@
+---
+title: "Data Simulation"
+author: "Sophie Castel"
+date: "7/23/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Generating Original Data
+## Straining Mt
+```{r}
+# Breaking Mt
+# Generate D datasets, fixing frequency, fixing amplitude, varying trends as d increases.
+D = 5
+
+data <- list()
+Tt <- simTt(n=100, numFreq = 20, ampMod = FALSE, freqRes = NULL)
+Wt <- simWt(n=100)
+
+for(d in 0:(D-1)){
+  Mt <- simMt(n=100, numTrend = d, trendType = "polynomial")
+  data$Xt[[(d+1)]] <- Mt$value+Tt$value+Wt
+  data$Mt[[(d+1)]] <- Mt$value
+  data$Tt[[(d+1)]] <- Tt$value
+  data$Mt_fn[[(d+1)]] <- Mt$fn
+  data$Tt_fn[[(d+1)]] <- Tt$fn
+}
+
+# Creating list object
+sets <- numeric(D)
+for(d in 1:(D-1)){
+  sets[d] <- paste("D",d,"=data$Xt[[",d,"]],",sep="")
+}
+sets[D] <- paste("D",D,"=data$Xt[[",D,"]]",sep="")
+list_call <- paste("list(",paste(sets,collapse=""),")")
+
+OriginalData = eval(parse(text=list_call))
+
+```
+
+## Straining Tt
+```{r}
+# Breaking Tt
+# Generate D datasets, decreasing frequency separation, amplitude modulation, as d increases. Strip out trends.
+D = 5
+n = 1000
+t <- 0:(n-1)
+
+data <- list()
+Mt <- simMt(n=n, numTrend = 0)
+Wt <- simWt(n=n)
+
+for(d in 1:D){
+  Tt <- simTt(n=n, ampMod = TRUE, numFreq = d*10, freqRes = d)
+  data$Xt[[d]] <- Mt$value+Tt$value+Wt
+  data$Mt[[d]] <- Mt$value
+  data$Tt[[d]] <- Tt$value
+  data$Mt_fn <- Mt$fn
+  data$Tt_fn <- Tt$fn
+}
+
+# Creating list object
+sets <- numeric(D)
+for(d in 1:(D-1)){
+  sets[d] <- paste("D",d,"=data$Xt[[",d,"]],",sep="")
+}
+sets[D] <- paste("D",D,"=data$Xt[[",D,"]]",sep="")
+list_call <- paste("list(",paste(sets,collapse=""),")")
+
+OriginalData = eval(parse(text=list_call))
+
+```
+
+## Straining Wt
+```{r}
+# Breaking Wt
+# Generate D datasets, changing degree of correlation in the noise.
+simWt <- function(n=1000,p=0,q=0){
+  stopifnot(p>=0,q>=0,n>=0,n%%1==0)
+  
+  if(p > 0){
+        repeat{
+      ar<-numeric(p)
+        for(i in 1:p){
+          ar[i] <- c(sample(seq(-p,p,length.out=1000),1))
+        }
+      minroots <- min(Mod(polyroot(c(1, -ar))))
+        if(minroots > 1){
+      break
+    }
+  }
+          if(q>0){
+            ma <- c(sample(seq(0,1,length.out=1000),q))
+            model <- list(order = c(p,0,q), ar = ar, ma = ma)
+          }
+        
+          else if(q == 0){
+            model <- list(order = c(p,0,q), ar = ar)
+          }
+  }
+  
+  else if(p == 0){
+    if(q==0){
+      model <- list(order = c(p,0,q))
+    }
+    
+    else if(q > 0){
+      ma <- c(sample(seq(0,1,length.out=1000),q))
+      model <- list(order = c(p,0,q), ma = ma)
+    }
+  }
+  
+  Wt = arima.sim(model, n = n)
+  return(Wt)
+}
+```
+
+play wth trends keeping everything else fixed with enough periodicities to have meaningful data randomize the frequencies (20, 30) spaced relatively well, no noise structure, just random noise. Then include nonpolynomial trends, piecewise functions 
+
+Then strip out trends, make it flat, just have periodicities, let them get closer in frequency time varying amplitudes, frequency modulation. what happens when we violate the assumption that Tt is periodic
+
+Finally, for Wt, instead of white, have AR, MA noise.
+
+Algorithm has three stages, try to break it in three ways. Allow for detection of nonpolynomial trends in Mt, include polynomial frequency modulation in detection of Tt,
+
+Future work, change the degree of clustering so that its not MCAR but follows some probability distribution. Change the length of the series.Change the Tt algorith to include nonpolyomials. Convert to linear combination of polynomials first (Fourier series) then remove to tackle nonpolynomia trends?
+
+# Plotting Original Data
+
+```{r}
+par(mfrow=c(2,5))
+for(d in 1:length(OriginalData)){
+  plot(x=t,y=OriginalData[[d]], type = "l", main = names(OriginalData)[d], xlab = "time", ylab = "Xt")
+}
+```
+
+From this we get a list object called OriginalData, with dimension $D\times 1000$:
+$d$ = 1,...,D = dataset$_d$
+
+# Generating Gappy Data
+```{r GappyData, cache = TRUE}
+prop_vec = c(0.05,0.10,0.15,0.20)
+gap_vec = c(1,5,10)
+K = 10 # number of gappy series to simulate under each p,g specification
+
+GappyData <- list()
+
+for(d in 1:length(OriginalData)){
+  GappyData[[d]] <- simulateGaps(data = as.numeric(OriginalData[[d]]), prop_vec = prop_vec, gap_vec = gap_vec, K = K)
+}
+names(GappyData) <- names(OriginalData)
+
+# dimension (d, p, g, k) 
+```
+
+From this we get a multi-level list object called GappyData, with dimension $d,p,g,k$:
+$d = 1,...,D$ = dataset$_d$
+$p = 1,...,P$ = proportion of missing values$_p$
+$g = 1,...,G$ = gap width$_g$
+$k = 1,...,K$ = sample ID under each $d,p,g$ specification
+
+To call a particular list value, follow the following format:
+GappyData[["D$d$"]]\$p$p$\$g$g$[[$k$]]
+
